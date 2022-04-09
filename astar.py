@@ -145,12 +145,19 @@ def solve(rows, distance_display):
                 rows[x][y].update()
         distance_display.configure(text=(("Total distance: " + str(last_move.h))))
 
+# Store all of the points in a set and don't plot the same points over each other, a serious performance
+# issue when I have over 70K points to plot
+pointset = set()
+
 def addAllStateGraphToPlot():
     for move in state_graph.values():
         addMoveToPlot(move)
+    for point in pointset:
+        plt.plot(point[0], point[1], 'ro')
 
 def addMoveToPlot(move):
-    plt.plot(move.g, move.h, 'ro')
+    if str((move.g, move.h)) not in pointset:
+        pointset.add((move.g, move.h))
     if move.prior_move is not None:
         plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
 
