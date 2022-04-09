@@ -2,9 +2,13 @@ from tkinter import *
 import numpy as np
 from queue import PriorityQueue
 import time
-from treelib import Node, Tree
-import sys
-import io
+import math
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use("TkAgg")
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import (FigureCanvasTk, NavigationToolbar2Tk)
+from IPython.display import clear_output
 
 # Solution board
 solution = np.array([
@@ -13,11 +17,7 @@ solution = np.array([
     [7,8,0]
     ])
 
-old_stdout = sys.stdout # Memorize the default stdout stream
-sys.stdout = buffer = io.StringIO()
-tree = Tree()
 ws = Tk()
-search_graph = Label(ws, width=100)
 
 # Convert a board to a key, allowing for use as a key in a dictionary
 def boardToKey(myboard):
@@ -40,22 +40,24 @@ def keyToBoard(myKey):
 # It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
 class Move:
     g=None
+    h=None
     tile_moved=None
-    heuristic=None
     prior_move=None
     board = None
 
-    # Make it comparable based on f-value for priority queue
+    def f(self):
+        return self.g + self.h
+
     def __lt__(self, other):
-        return (self.g + self.heuristic) < (other.g + other.heuristic)
+        return (self.f()) < (other.f())
     
     def __eq__(self, other):
-        return (self.g + self.heuristic) == (other.g + other.heuristic)
+        return (self.f()) == (other.f())
     
 # Moves to explore is list of moves. It will choose the move with the lowest f value cost
 moves_to_explore = PriorityQueue()
 
-# {board, cost}
+# {board, move}
 # Store all of the discovered board states and the cost to get there, only keep one of each board state with the lowest cost to getting there.
 state_graph = {}
 
@@ -67,10 +69,10 @@ def init():
 
     first_move = Move()
     first_move.board = initial_board
-    first_move.heuristic = compute_total_distance(first_move.board)
+    first_move.h = compute_total_distance(first_move.board)
     first_move.g = 0
-    state_graph.update({boardToKey(first_move.board): first_move.g})
-    moves_to_explore.put((first_move.heuristic, first_move))
+    state_graph.update({boardToKey(first_move.board): first_move})
+    moves_to_explore.put((first_move.f(), first_move))
     return initial_board
  
 # Provided coordinates and the gameboard, calculate the distance of the value at those coordinates from the correct coordinates
@@ -84,8 +86,9 @@ def compute_total_distance(arr):
     distance = 0
     for x in range (0, 3):
         for y in range (0, 3):
-            distance = distance + tile_distance_from_solution(arr, x, y)
-    return distance[0]
+            if arr[x][y] != solution[x][y]: distance = distance + 1
+            #distance = distance + tile_distance_from_solution(arr, x, y)
+    return distance
 
 # Given a prior move, find tiles adjacent to 0 given the prior move's board state and create moves from that state
 def expand_move(prior_move):
@@ -98,10 +101,9 @@ def expand_move(prior_move):
                     tile_moved = prior_move.board[moved_index]
                     move = make_move(prior_move, tile_moved)
                     boardKey = boardToKey(move.board)
-                    if boardKey not in state_graph or (move.g < state_graph.get(boardKey)):
-                        state_graph.update({boardKey: move.g})
-                        moves_to_explore.put((move.heuristic, move))
-                        updateTree(boardToKey(prior_move.board),boardKey)
+                    if boardKey not in state_graph or (move.g < state_graph.get(boardKey).g):
+                        state_graph.update({boardKey: move})
+                        moves_to_explore.put((move.f(), move))
 
 
 
@@ -113,19 +115,19 @@ def make_move(prior_move, tile_moved):
     move.board = np.copy(prior_move.board)
     move.board[np.where(prior_move.board==0)] = move.tile_moved
     move.board[np.where(prior_move.board==tile_moved)] = 0
-    move.heuristic = compute_total_distance(move.board)
+    move.h = compute_total_distance(move.board)
     move.g = prior_move.g + 1
     return move
 
 # Do one iteration of the algorithm and return the last move if we have solved it
 def iteration():
-    # Find the best move to make
-    item = moves_to_explore.get()
-    #print("Heuristic of best move: ",item[0])
-    best_move = item[1]
+    
 
+    best_move = moves_to_explore.get()[1]
+
+    print("Lowest Cost:",best_move.f(),"Moves to Explore:",moves_to_explore.qsize(),"# of States:",len(state_graph))
     # If the heuristic of the best move is 0, we have solved the puzzle
-    if best_move.heuristic == 0:
+    if best_move.h == 0:
         #print("Board has been solved")
         return best_move
     else: # Otherwise we must continue to suffer
@@ -139,16 +141,15 @@ def solve(rows, distance_display):
     while last_move is None:
         last_move = iteration()
 
-
     solution_ordered = []
     while last_move.prior_move is not None:
         solution_ordered.append(last_move)
         last_move = last_move.prior_move
     solution_ordered.reverse()
 
-    tree.show()
-    with open('output.txt', 'a') as f:
-        f.write(buffer.getvalue())
+    addAllStateGraphToPlot()
+    plt.show(block=False)
+
     for last_move in solution_ordered:
         time.sleep(0.5)
         for x in range(0,3):
@@ -157,22 +158,22 @@ def solve(rows, distance_display):
                 if last_move.board[x][y] == 0:
                     rows[x][y].configure(bg='red')
                 rows[x][y].update()
-        distance_display.configure(text=(("Total distance: " + str(last_move.heuristic))))
+        distance_display.configure(text=(("Total distance: " + str(last_move.h))))
 
-def updateTree(oldboardKey, newBoardKey):
-    buffer.flush()
-    if tree.contains(newBoardKey):
-        tree.move_node(tree.get_node(newBoardKey), oldboardKey)
-    else:
-        tree.create_node(prettyPrintBoard(newBoardKey),newBoardKey, parent=oldboardKey)
-    #tree.show()
-    #search_graph.configure(text=buffer.getvalue())
+def addAllStateGraphToPlot():
+    for move in state_graph.values():
+        addMoveToPlot(move)
+
+def addMoveToPlot(move):
+    plt.plot(move.g, move.h, 'ro')
+    if move.prior_move is not None:
+        plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
 
 
 initial_board = init()
 
 ws.title('A* Algorithm')
-ws.geometry('1200x500')
+ws.geometry('500x500')
 ws.config(bg='#9FD996')
 
 rows = []
@@ -183,12 +184,34 @@ for x in range(0,3):
         e.grid(row=x, column=y, sticky=NSEW,)
         cols.append(e)
     rows.append(cols)
-distance_display = Label(ws,text=(("Total distance: " + str(int(compute_total_distance(initial_board))))),height=4, relief="groove")
-distance_display.grid(row=3,column=0,sticky=NSEW,)
-btn= Button(ws, text= "Solve", command= lambda:solve(rows, distance_display))
-btn.grid(row=4, column=0, sticky=NSEW,)
-tree.create_node(prettyPrintBoard(boardToKey(initial_board)),boardToKey(initial_board))
-#tree.show()
-search_graph.configure(text=buffer.getvalue())
-search_graph.grid(row=0,column=3,rowspan=5,sticky=NSEW,)
+buttonFrame = Frame(ws)
+buttonFrame.grid(row=3,column=0,columnspan=3)
+distance_display = Label(buttonFrame,text=(("Total distance: " + str(int(compute_total_distance(initial_board))))),height=4, relief="groove")
+distance_display.pack(side=LEFT)
+btn= Button(buttonFrame, text= "Solve", command= lambda:solve(rows, distance_display))
+btn.pack(side=LEFT)
+
+#plt.plot(0, compute_total_distance(initial_board),'ro')
+#plt.plot([3, 5], [1, 6],color="green")
+plt.ylim([0, 10])
+plt.xlabel('G: Distance From Start')
+plt.ylabel('H: Heuristic')
+#plt.plot([0, 1], [compute_total_distance(initial_board), 7])
+#plt.show()
+
+# plotFrame = Frame(ws, width=500, height=500)
+# plotFrame.grid(row=0,column=3,rowspan=5)
+# fig = Figure(figsize = (5, 5),dpi = 100)
+# ax = fig.add_subplot(111)
+# t = np.arange(0.0,3.0,0.01)
+# s = np.sin(np.pi*t)
+# ax.plot(t,s)
+# canvas = FigureCanvasTk(fig, plotFrame)  
+# canvas.draw()
+# canvas.get_tk_widget().pack(side=BOTTOM, fill=BOTH, expand=True)
+# toolbar = NavigationToolbar2Tk(canvas, plotFrame)
+# toolbar.pack()
+# toolbar.update()
+# canvas._tkcanvas.pack(side=TOP, fill=BOTH, expand=True)
+# canvas.draw_idle()
 ws.mainloop()
