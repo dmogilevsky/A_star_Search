@@ -2,13 +2,7 @@ from tkinter import *
 import numpy as np
 from queue import PriorityQueue
 import time
-import math
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use("TkAgg")
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import (FigureCanvasTk, NavigationToolbar2Tk)
-from IPython.display import clear_output
 
 # Solution board
 solution = np.array([
@@ -17,24 +11,12 @@ solution = np.array([
     [7,8,0]
     ])
 
-ws = Tk()
+# Moves to explore is list of moves. It will choose the move with the lowest f value cost
+moves_to_explore = PriorityQueue()
 
-# Convert a board to a key, allowing for use as a key in a dictionary
-def boardToKey(myboard):
-    return(''.join([str(x) for x in myboard.flatten().tolist()]))
-
-def prettyPrintBoard(key):
-    return(
-    "["+key[0]+","+key[1]+","+key[2]+"]\n"
-    "["+key[3]+","+key[4]+","+key[5]+"]\n"
-    "["+key[6]+","+key[7]+","+key[8]+"]\n"
-    )
-
-# Convert a string to a board
-def keyToBoard(myKey):
-    board = np.array(list(myKey))
-    board.reshape((3, 3))
-    return board
+# {board, move}
+# Store all of the discovered board states and the cost to get there, only keep one of each board state with the lowest cost to getting there.
+state_graph = {}
 
 # A move is a node with a parent move, the tile moved (numbered 1-8), the heurstic for its board state, and the board state
 # It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
@@ -53,13 +35,23 @@ class Move:
     
     def __eq__(self, other):
         return (self.f()) == (other.f())
-    
-# Moves to explore is list of moves. It will choose the move with the lowest f value cost
-moves_to_explore = PriorityQueue()
 
-# {board, move}
-# Store all of the discovered board states and the cost to get there, only keep one of each board state with the lowest cost to getting there.
-state_graph = {}
+# Convert a board to a key, allowing for use as a key in a dictionary
+def boardToKey(myboard):
+    return(''.join([str(x) for x in myboard.flatten().tolist()]))
+
+def prettyPrintBoard(key):
+    return(
+    "["+key[0]+","+key[1]+","+key[2]+"]\n"
+    "["+key[3]+","+key[4]+","+key[5]+"]\n"
+    "["+key[6]+","+key[7]+","+key[8]+"]\n"
+    )
+
+# Convert a string to a board
+def keyToBoard(myKey):
+    board = np.array(list(myKey))
+    board.reshape((3, 3))
+    return board
 
 # Randomly initialize the board and create the first move, which has no tile moved
 def init():
@@ -106,7 +98,6 @@ def expand_move(prior_move):
                         moves_to_explore.put((move.f(), move))
 
 
-
 # Make a move given the prior move and the tile being moved for the new move
 def make_move(prior_move, tile_moved):
     move = Move()
@@ -121,16 +112,11 @@ def make_move(prior_move, tile_moved):
 
 # Do one iteration of the algorithm and return the last move if we have solved it
 def iteration():
-    
-
     best_move = moves_to_explore.get()[1]
-
     print("Lowest Cost:",best_move.f(),"Moves to Explore:",moves_to_explore.qsize(),"# of States:",len(state_graph))
-    # If the heuristic of the best move is 0, we have solved the puzzle
-    if best_move.h == 0:
-        #print("Board has been solved")
+    if best_move.h == 0:    # If the heuristic of the best move is 0, we have solved the puzzle
         return best_move
-    else: # Otherwise we must continue to suffer
+    else:                   # Otherwise we must continue to suffer
         expand_move(best_move)
         return None
 
@@ -143,9 +129,8 @@ def solve(rows, distance_display):
 
     solution_ordered = []
     while last_move.prior_move is not None:
-        solution_ordered.append(last_move)
+        solution_ordered.insert(0, last_move)
         last_move = last_move.prior_move
-    solution_ordered.reverse()
 
     addAllStateGraphToPlot()
     plt.show(block=False)
@@ -172,6 +157,7 @@ def addMoveToPlot(move):
 
 initial_board = init()
 
+ws = Tk()
 ws.title('A* Algorithm')
 ws.geometry('500x500')
 ws.config(bg='#9FD996')
@@ -191,27 +177,7 @@ distance_display.pack(side=LEFT)
 btn= Button(buttonFrame, text= "Solve", command= lambda:solve(rows, distance_display))
 btn.pack(side=LEFT)
 
-#plt.plot(0, compute_total_distance(initial_board),'ro')
-#plt.plot([3, 5], [1, 6],color="green")
 plt.ylim([0, 10])
 plt.xlabel('G: Distance From Start')
 plt.ylabel('H: Heuristic')
-#plt.plot([0, 1], [compute_total_distance(initial_board), 7])
-#plt.show()
-
-# plotFrame = Frame(ws, width=500, height=500)
-# plotFrame.grid(row=0,column=3,rowspan=5)
-# fig = Figure(figsize = (5, 5),dpi = 100)
-# ax = fig.add_subplot(111)
-# t = np.arange(0.0,3.0,0.01)
-# s = np.sin(np.pi*t)
-# ax.plot(t,s)
-# canvas = FigureCanvasTk(fig, plotFrame)  
-# canvas.draw()
-# canvas.get_tk_widget().pack(side=BOTTOM, fill=BOTH, expand=True)
-# toolbar = NavigationToolbar2Tk(canvas, plotFrame)
-# toolbar.pack()
-# toolbar.update()
-# canvas._tkcanvas.pack(side=TOP, fill=BOTH, expand=True)
-# canvas.draw_idle()
 ws.mainloop()
