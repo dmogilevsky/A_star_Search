@@ -14,6 +14,9 @@ solution = np.array([
 # Moves to explore is list of moves. It will choose the move with the lowest f value cost
 moves_to_explore = PriorityQueue()
 
+# Moves we don't want to explore because we found a faster route to the same board state
+stupid_moves = set()
+
 # {board, move}
 # Store all of the discovered board states and the cost to get there, only keep one of each board state with the lowest cost to getting there.
 state_graph = {}
@@ -32,9 +35,6 @@ class Move:
 
     def __lt__(self, other):
         return (self.f()) < (other.f())
-    
-    def __eq__(self, other):
-        return (self.f()) == (other.f())
 
 # Convert a board to a key, allowing for use as a key in a dictionary
 def boardToKey(myboard):
@@ -78,9 +78,9 @@ def compute_total_distance(arr):
     distance = 0
     for x in range (0, 3):
         for y in range (0, 3):
-            if arr[x][y] != solution[x][y]: distance = distance + 1
-            #distance = distance + tile_distance_from_solution(arr, x, y)
-    return distance
+            #if arr[x][y] != solution[x][y]: distance = distance + 1
+            distance = distance + tile_distance_from_solution(arr, x, y)
+    return distance[0]
 
 # Given a prior move, find tiles adjacent to 0 given the prior move's board state and create moves from that state
 def expand_move(prior_move):
@@ -94,8 +94,11 @@ def expand_move(prior_move):
                     move = make_move(prior_move, tile_moved)
                     boardKey = boardToKey(move.board)
                     if boardKey not in state_graph or (move.g < state_graph.get(boardKey).g):
-                        state_graph.update({boardKey: move})
-                        moves_to_explore.put((move.f(), move))
+                        #if (boardKey in state_graph): # If this move is a faster route to an already explored state
+                        #    stupid_moves.add(state_graph.get(boardKey)) # Add the old move to the list of moves we won't explore
+                        state_graph.update({boardKey: move})   # Then put the new move in the state graph
+                        moves_to_explore.put((move.f(), move)) # And in the moves to explore list
+
 
 
 # Make a move given the prior move and the tile being moved for the new move
@@ -112,7 +115,9 @@ def make_move(prior_move, tile_moved):
 
 # Do one iteration of the algorithm and return the last move if we have solved it
 def iteration():
-    best_move = moves_to_explore.get()[1]
+    best_move = best_move = moves_to_explore.get()[1]
+    if best_move.g > state_graph.get(boardToKey(best_move.board)).g:
+        return None # If we've already gotten to this with a lower cost before, don't bother with this move
     print("Lowest Cost:",best_move.f(),"Moves to Explore:",moves_to_explore.qsize(),"# of States:",len(state_graph))
     if best_move.h == 0:    # If the heuristic of the best move is 0, we have solved the puzzle
         return best_move
@@ -127,10 +132,14 @@ def solve(rows, distance_display):
     while last_move is None:
         last_move = iteration()
 
+    print("Solved")
+
     solution_ordered = []
     while last_move.prior_move is not None:
         solution_ordered.insert(0, last_move)
         last_move = last_move.prior_move
+
+    print("Backtraced solution")
 
     addAllStateGraphToPlot()
     plt.show(block=False)
@@ -145,21 +154,25 @@ def solve(rows, distance_display):
                 rows[x][y].update()
         distance_display.configure(text=(("Total distance: " + str(last_move.h))))
 
-# Store all of the points in a set and don't plot the same points over each other, a serious performance
-# issue when I have over 70K points to plot
-pointset = set()
 
 def addAllStateGraphToPlot():
+    # Store all of the points/lines in a set and don't plot the same points/lines over each other, a serious performance
+    # issue when I have over 70K points to plot and god knows how many lines
+    pointset = set()
+    lineset = set()
     for move in state_graph.values():
-        addMoveToPlot(move)
+        addMoveToPlot(move, pointset, lineset)
     for point in pointset:
         plt.plot(point[0], point[1], 'ro')
 
-def addMoveToPlot(move):
+def addMoveToPlot(move, pointset, lineset):
     if str((move.g, move.h)) not in pointset:
         pointset.add((move.g, move.h))
     if move.prior_move is not None:
-        plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
+        linestring = str(((move.prior_move.g, move.g), (move.prior_move.h, move.h)))
+        if linestring not in lineset and move.prior_move is not None:
+            lineset.add(linestring)
+            plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
 
 
 initial_board = init()
@@ -184,7 +197,7 @@ distance_display.pack(side=LEFT)
 btn= Button(buttonFrame, text= "Solve", command= lambda:solve(rows, distance_display))
 btn.pack(side=LEFT)
 
-plt.ylim([0, 10])
+plt.ylim([0, 28])
 plt.xlabel('G: Distance From Start')
 plt.ylabel('H: Heuristic')
 ws.mainloop()
