@@ -14,12 +14,18 @@ solution = np.array([
 # Moves to explore is list of moves. It will choose the move with the lowest f value cost
 moves_to_explore = PriorityQueue()
 
-# Moves we don't want to explore because we found a faster route to the same board state
-stupid_moves = set()
-
 # {board, move}
 # Store all of the discovered board states and the cost to get there, only keep one of each board state with the lowest cost to getting there.
 state_graph = {}
+
+# Need this to be a global for now
+fig = plt.figure(figsize=(10,5))
+ax = fig.gca()
+ax.set_ylim(0,28)
+ax.set_xlim(0,50)
+plt.xlabel('G: Distance From Start')
+plt.ylabel('H: Heuristic')
+plot, = plt.plot([], [])
 
 # A move is a node with a parent move, the tile moved (numbered 1-8), the heurstic for its board state, and the board state
 # It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
@@ -94,8 +100,7 @@ def expand_move(prior_move):
                     move = make_move(prior_move, tile_moved)
                     boardKey = boardToKey(move.board)
                     if boardKey not in state_graph or (move.g < state_graph.get(boardKey).g):
-                        #if (boardKey in state_graph): # If this move is a faster route to an already explored state
-                        #    stupid_moves.add(state_graph.get(boardKey)) # Add the old move to the list of moves we won't explore
+                        addMoveToPlot(move)
                         state_graph.update({boardKey: move})   # Then put the new move in the state graph
                         moves_to_explore.put((move.f(), move)) # And in the moves to explore list
 
@@ -141,8 +146,8 @@ def solve(rows, distance_display):
 
     print("Backtraced solution")
 
-    addAllStateGraphToPlot()
-    plt.show(block=False)
+    #addAllStateGraphToPlot()
+    #plt.show(block=False)
 
     for last_move in solution_ordered:
         time.sleep(0.5)
@@ -156,23 +161,17 @@ def solve(rows, distance_display):
 
 
 def addAllStateGraphToPlot():
-    # Store all of the points/lines in a set and don't plot the same points/lines over each other, a serious performance
-    # issue when I have over 70K points to plot and god knows how many lines
-    pointset = set()
-    lineset = set()
     for move in state_graph.values():
-        addMoveToPlot(move, pointset, lineset)
-    for point in pointset:
-        plt.plot(point[0], point[1], 'ro')
+        addMoveToPlot(move)
 
-def addMoveToPlot(move, pointset, lineset):
-    if str((move.g, move.h)) not in pointset:
-        pointset.add((move.g, move.h))
+def addMoveToPlot(move):
     if move.prior_move is not None:
-        linestring = str(((move.prior_move.g, move.g), (move.prior_move.h, move.h)))
-        if linestring not in lineset and move.prior_move is not None:
-            lineset.add(linestring)
-            plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
+        plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
+        #plot.set_xdata(np.append(plot.get_xdata(), [move.prior_move.g, move.g]))
+        #plot.set_ydata(np.append(plot.get_ydata(), [move.prior_move.h, move.h]))
+    plt.plot(move.g, move.h, 'ro')
+    fig.canvas.draw_idle()
+    fig.canvas.flush_events()
 
 
 initial_board = init()
@@ -197,7 +196,6 @@ distance_display.pack(side=LEFT)
 btn= Button(buttonFrame, text= "Solve", command= lambda:solve(rows, distance_display))
 btn.pack(side=LEFT)
 
-plt.ylim([0, 28])
-plt.xlabel('G: Distance From Start')
-plt.ylabel('H: Heuristic')
+plot, = plt.plot(0, compute_total_distance(initial_board), 'ro')
+plt.show(block=False)
 ws.mainloop()
