@@ -1,4 +1,5 @@
 from tkinter import *
+from attr import dataclass, field
 import numpy as np
 from queue import PriorityQueue
 import time
@@ -22,11 +23,20 @@ state_graph = {}
 fig = plt.figure(figsize=(10,5))
 ax = fig.gca()
 ax.set_ylim(0,28)
-ax.set_xlim(0,50)
+ax.set_xlim(0,30)
 plt.xlabel('G: Distance From Start')
 plt.ylabel('H: Heuristic')
+plt.title('Graph of Search Space')
 plot, = plt.plot([], [])
+pointset = set()
+lineset = set()
 
+greedy = False
+
+@dataclass(order=True)
+class PrioritizedItem:
+    priority: int
+    item: object = field()
 # A move is a node with a parent move, the tile moved (numbered 1-8), the heurstic for its board state, and the board state
 # It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
 class Move:
@@ -37,10 +47,13 @@ class Move:
     board = None
 
     def f(self):
-        return self.g + self.h
+        if greedy:
+            return self.h
+        else:
+            return self.g + self.h
 
     def __lt__(self, other):
-        return (self.f()) < (other.f())
+        return (self.f()) > (other.f())
 
 # Convert a board to a key, allowing for use as a key in a dictionary
 def boardToKey(myboard):
@@ -59,18 +72,46 @@ def keyToBoard(myKey):
     board.reshape((3, 3))
     return board
 
+# https://www.geeksforgeeks.org/check-instance-8-puzzle-solvable/
+# ########################################################################
+# A utility function to count
+# inversions in given array 'arr[]'
+def getInvCount(arr):
+    inv_count = 0
+    empty_value = 0
+    for i in range(0, 9):
+        for j in range(i + 1, 9):
+            if arr[j] != empty_value and arr[i] != empty_value and arr[i] > arr[j]:
+                inv_count += 1
+    return inv_count
+
+# This function returns true
+# if given 8 puzzle is solvable.
+def isSolvable(puzzle) :
+ 
+    # Count inversions in given 8 puzzle
+    inv_count = getInvCount([j for sub in puzzle for j in sub])
+    print(inv_count)
+    # return true if inversion count is even.
+    return (inv_count % 2 == 0)
+###########################################################################
+
 # Randomly initialize the board and create the first move, which has no tile moved
 def init():
-    initial_board = np.arange(9)
-    np.random.shuffle(initial_board)
-    initial_board = initial_board.reshape((3,3))
+    solvable = False
+    initial_board = None
+    while not solvable:
+        initial_board = np.arange(9)
+        np.random.shuffle(initial_board)
+        initial_board = initial_board.reshape((3,3))
+        solvable = isSolvable(initial_board)
 
     first_move = Move()
     first_move.board = initial_board
     first_move.h = compute_total_distance(first_move.board)
     first_move.g = 0
     state_graph.update({boardToKey(first_move.board): first_move})
-    moves_to_explore.put((first_move.f(), first_move))
+    moves_to_explore.put(PrioritizedItem(first_move.f(), first_move))
     return initial_board
  
 # Provided coordinates and the gameboard, calculate the distance of the value at those coordinates from the correct coordinates
@@ -100,9 +141,9 @@ def expand_move(prior_move):
                     move = make_move(prior_move, tile_moved)
                     boardKey = boardToKey(move.board)
                     if boardKey not in state_graph or (move.g < state_graph.get(boardKey).g):
-                        addMoveToPlot(move)
+                        liveUpdate(move)
                         state_graph.update({boardKey: move})   # Then put the new move in the state graph
-                        moves_to_explore.put((move.f(), move)) # And in the moves to explore list
+                        moves_to_explore.put(PrioritizedItem(move.f(), move)) # And in the moves to explore list
 
 
 
@@ -120,10 +161,11 @@ def make_move(prior_move, tile_moved):
 
 # Do one iteration of the algorithm and return the last move if we have solved it
 def iteration():
-    best_move = best_move = moves_to_explore.get()[1]
+    best_move = best_move = moves_to_explore.get().item
     if best_move.g > state_graph.get(boardToKey(best_move.board)).g:
+        print("ignored")
         return None # If we've already gotten to this with a lower cost before, don't bother with this move
-    print("Lowest Cost:",best_move.f(),"Moves to Explore:",moves_to_explore.qsize(),"# of States:",len(state_graph))
+    print("F:",best_move.f(),"H:",best_move.h,"G:",best_move.g,"Moves to Explore:",moves_to_explore.qsize(),"# of States:",len(state_graph))
     if best_move.h == 0:    # If the heuristic of the best move is 0, we have solved the puzzle
         return best_move
     else:                   # Otherwise we must continue to suffer
@@ -151,13 +193,7 @@ def solve(rows, distance_display):
 
     for last_move in solution_ordered:
         time.sleep(0.5)
-        for x in range(0,3):
-            for y in range(0,3):
-                rows[x][y].configure(text=(str(int(last_move.board[x][y]))), bg='white')
-                if last_move.board[x][y] == 0:
-                    rows[x][y].configure(bg='red')
-                rows[x][y].update()
-        distance_display.configure(text=(("Total distance: " + str(last_move.h))))
+        updateLiveBoard(last_move)
 
 
 def addAllStateGraphToPlot():
@@ -165,20 +201,37 @@ def addAllStateGraphToPlot():
         addMoveToPlot(move)
 
 def addMoveToPlot(move):
+    if (move.g, move.h) not in pointset:
+        pointset.add((move.g, move.h))
+        plt.plot(move.g, move.h, 'ro')
     if move.prior_move is not None:
-        plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
-        #plot.set_xdata(np.append(plot.get_xdata(), [move.prior_move.g, move.g]))
-        #plot.set_ydata(np.append(plot.get_ydata(), [move.prior_move.h, move.h]))
-    plt.plot(move.g, move.h, 'ro')
+        line = ((move.prior_move.g, move.g), (move.prior_move.h, move.h))
+        if line not in lineset and move.prior_move is not None:
+            lineset.add(line)
+            plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
     fig.canvas.draw_idle()
     fig.canvas.flush_events()
+
+def updateLiveBoard(move):
+        for x in range(0,3):
+            for y in range(0,3):
+                if move.board[x][y] == 0:
+                    rows[x][y].configure(bg='red')
+                else:
+                    rows[x][y].configure(text=(str(int(move.board[x][y]))), bg='white')
+                rows[x][y].update()
+        distance_display.configure(text=(("Total distance: " + str(move.h))))
+
+def liveUpdate(move):
+    addMoveToPlot(move)
+    updateLiveBoard(move)
 
 
 initial_board = init()
 
 ws = Tk()
 ws.title('A* Algorithm')
-ws.geometry('500x500')
+ws.geometry('300x450')
 ws.config(bg='#9FD996')
 
 rows = []
@@ -186,15 +239,17 @@ for x in range(0,3):
     cols = []
     for y in range(0,3):
         e = Label(ws,text=(str(int(initial_board[x][y]))), font='Helvetica 14 bold', width=10,height=6, relief="groove")
+        if initial_board[x][y] == 0:
+            e.configure(text='')
         e.grid(row=x, column=y, sticky=NSEW,)
         cols.append(e)
     rows.append(cols)
 buttonFrame = Frame(ws)
 buttonFrame.grid(row=3,column=0,columnspan=3)
-distance_display = Label(buttonFrame,text=(("Total distance: " + str(int(compute_total_distance(initial_board))))),height=4, relief="groove")
+distance_display = Label(buttonFrame,text=(("Total distance: " + str(int(compute_total_distance(initial_board))))),width=15,height=4, relief="groove")
 distance_display.pack(side=LEFT)
 btn= Button(buttonFrame, text= "Solve", command= lambda:solve(rows, distance_display))
-btn.pack(side=LEFT)
+btn.pack(side=LEFT,fill='y')
 
 plot, = plt.plot(0, compute_total_distance(initial_board), 'ro')
 plt.show(block=False)
