@@ -19,24 +19,16 @@ moves_to_explore = PriorityQueue()
 # Store all of the discovered board states and the cost to get there, only keep one of each board state with the lowest cost to getting there.
 state_graph = {}
 
-# Need this to be a global for now
+# Need this to be a global
 fig = plt.figure(figsize=(10,5))
-ax = fig.gca()
-ax.set_ylim(0,28)
-ax.set_xlim(0,30)
-plt.xlabel('G: Distance From Start')
-plt.ylabel('H: Heuristic')
-plt.title('Graph of Search Space')
 plot, = plt.plot([], [])
 pointset = set()
 lineset = set()
+delayEntry = None
+live_board=False # Configuring whether to show the board fly through all of the checked states during solving
+live_graph=False # Configuring whether to plot the graph sequentially or plot the search space all at once at the end
+delay_time=0.5   # Configure the delay between each move shown for the solution
 
-greedy = False
-
-@dataclass(order=True)
-class PrioritizedItem:
-    priority: int
-    item: object = field()
 # A move is a node with a parent move, the tile moved (numbered 1-8), the heurstic for its board state, and the board state
 # It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
 class Move:
@@ -47,10 +39,7 @@ class Move:
     board = None
 
     def f(self):
-        if greedy:
-            return self.h
-        else:
-            return self.g + self.h
+        return self.g + self.h
 
     def __lt__(self, other):
         return (self.f()) > (other.f())
@@ -79,7 +68,7 @@ def keyToBoard(myKey):
 def getInvCount(arr):
     inv_count = 0
     empty_value = 0
-    for i in range(0, 9):
+    for i in range(9):
         for j in range(i + 1, 9):
             if arr[j] != empty_value and arr[i] != empty_value and arr[i] > arr[j]:
                 inv_count += 1
@@ -88,16 +77,23 @@ def getInvCount(arr):
 # This function returns true
 # if given 8 puzzle is solvable.
 def isSolvable(puzzle) :
- 
     # Count inversions in given 8 puzzle
     inv_count = getInvCount([j for sub in puzzle for j in sub])
-    print(inv_count)
     # return true if inversion count is even.
     return (inv_count % 2 == 0)
 ###########################################################################
 
 # Randomly initialize the board and create the first move, which has no tile moved
 def init():
+    # Initialize plot
+    ax = fig.gca()
+    ax.set_ylim(0,28)
+    ax.set_xlim(0,30)
+    plt.xlabel('G: Distance From Start')
+    plt.ylabel('H: Heuristic')
+    plt.title('Graph of Search Space')
+
+    # Create board and first move
     solvable = False
     initial_board = None
     while not solvable:
@@ -111,7 +107,7 @@ def init():
     first_move.h = compute_total_distance(first_move.board)
     first_move.g = 0
     state_graph.update({boardToKey(first_move.board): first_move})
-    moves_to_explore.put(PrioritizedItem(first_move.f(), first_move))
+    moves_to_explore.put((first_move.f(), first_move))
     return initial_board
  
 # Provided coordinates and the gameboard, calculate the distance of the value at those coordinates from the correct coordinates
@@ -123,8 +119,8 @@ def tile_distance_from_solution(arr, x, y):
 # Calculate the total distance from the solution and return the value
 def compute_total_distance(arr):
     distance = 0
-    for x in range (0, 3):
-        for y in range (0, 3):
+    for x in range (3):
+        for y in range (3):
             #if arr[x][y] != solution[x][y]: distance = distance + 1
             distance = distance + tile_distance_from_solution(arr, x, y)
     return distance[0]
@@ -143,7 +139,7 @@ def expand_move(prior_move):
                     if boardKey not in state_graph or (move.g < state_graph.get(boardKey).g):
                         liveUpdate(move)
                         state_graph.update({boardKey: move})   # Then put the new move in the state graph
-                        moves_to_explore.put(PrioritizedItem(move.f(), move)) # And in the moves to explore list
+                        moves_to_explore.put((move.f(), move)) # And in the moves to explore list
 
 
 
@@ -161,7 +157,7 @@ def make_move(prior_move, tile_moved):
 
 # Do one iteration of the algorithm and return the last move if we have solved it
 def iteration():
-    best_move = best_move = moves_to_explore.get().item
+    best_move = best_move = moves_to_explore.get()[1]
     if best_move.g > state_graph.get(boardToKey(best_move.board)).g:
         print("ignored")
         return None # If we've already gotten to this with a lower cost before, don't bother with this move
@@ -174,7 +170,7 @@ def iteration():
 
 
 # Callback function, solves the puzzle and shows the moves to get to the solution
-def solve(rows, distance_display):
+def solve():
     last_move = None
     while last_move is None:
         last_move = iteration()
@@ -188,50 +184,63 @@ def solve(rows, distance_display):
 
     print("Backtraced solution")
 
-    #addAllStateGraphToPlot()
-    #plt.show(block=False)
+    if not live_graph: addAllStateGraphToPlot()
+    plt.show(block=False)
 
     for last_move in solution_ordered:
-        time.sleep(0.5)
-        updateLiveBoard(last_move)
+        time.sleep(float(delayEntry.get()))
+        addMoveToPlotAndUpdate(last_move, True)
+        updateBoard(last_move)
 
 
 def addAllStateGraphToPlot():
     for move in state_graph.values():
-        addMoveToPlot(move)
+        addMoveToPlot(move, False)
 
-def addMoveToPlot(move):
-    if (move.g, move.h) not in pointset:
+# Add a given move to the plot by plotting both the point representing the move's g and h values, as well as a line
+# from the parent move's point
+def addMoveToPlot(move, backtrace):
+    color = 'ro'
+    if backtrace: color = 'black'
+    if (move.g, move.h) not in pointset or backtrace:
         pointset.add((move.g, move.h))
-        plt.plot(move.g, move.h, 'ro')
+        plt.plot(move.g, move.h, color)
     if move.prior_move is not None:
         line = ((move.prior_move.g, move.g), (move.prior_move.h, move.h))
-        if line not in lineset and move.prior_move is not None:
+        if (line not in lineset or backtrace) and move.prior_move is not None:
             lineset.add(line)
-            plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
+            if color == 'ro': plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
+            else: plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h], color, linewidth=4)
+
+# Add a move to the plot and update it in real time
+def addMoveToPlotAndUpdate(move, backtrace):
+    addMoveToPlot(move, backtrace)
     fig.canvas.draw_idle()
     fig.canvas.flush_events()
 
-def updateLiveBoard(move):
-        for x in range(0,3):
-            for y in range(0,3):
+# Update the board to match the given move
+def updateBoard(move):
+        for x in range(3):
+            for y in range(3):
                 if move.board[x][y] == 0:
-                    rows[x][y].configure(bg='red')
+                    rows[x][y].configure(bg='red', text='')
                 else:
                     rows[x][y].configure(text=(str(int(move.board[x][y]))), bg='white')
                 rows[x][y].update()
         distance_display.configure(text=(("Total distance: " + str(move.h))))
 
+# Do a live update of the graph and board based on whether or not lvie update's were enabled
 def liveUpdate(move):
-    addMoveToPlot(move)
-    updateLiveBoard(move)
-
+    if live_graph:
+        addMoveToPlotAndUpdate(move, False)
+    if live_board:
+        updateBoard(move)
 
 initial_board = init()
 
 ws = Tk()
 ws.title('A* Algorithm')
-ws.geometry('300x450')
+ws.geometry('350x450')
 ws.config(bg='#9FD996')
 
 rows = []
@@ -248,8 +257,32 @@ buttonFrame = Frame(ws)
 buttonFrame.grid(row=3,column=0,columnspan=3)
 distance_display = Label(buttonFrame,text=(("Total distance: " + str(int(compute_total_distance(initial_board))))),width=15,height=4, relief="groove")
 distance_display.pack(side=LEFT)
-btn= Button(buttonFrame, text= "Solve", command= lambda:solve(rows, distance_display))
-btn.pack(side=LEFT,fill='y')
+Button(buttonFrame, text= "Solve", command= lambda:solve()).pack(side=LEFT,fill='y')
+
+def set_live_board():
+    global live_board
+    if live_board:
+        live_board = False
+    else:
+        live_board = True
+
+def set_live_graph():
+    global live_graph
+    if live_graph:
+        live_graph = False
+    else:
+        live_graph = True
+
+Checkbutton(buttonFrame, text='Live Board Updates', command=set_live_board).pack()
+Checkbutton(buttonFrame, text='Live Graph Updates', command=set_live_graph).pack()
+
+# Delay Time Entry box
+entryFrame = Frame(buttonFrame)
+entryFrame.pack()
+Label(entryFrame, text='Delay Time').pack(side=LEFT)
+delayEntry = Entry(entryFrame, width=7)
+delayEntry.insert(0, delay_time)
+delayEntry.pack(side=RIGHT)
 
 plot, = plt.plot(0, compute_total_distance(initial_board), 'ro')
 plt.show(block=False)
