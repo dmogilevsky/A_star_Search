@@ -1,5 +1,4 @@
 from tkinter import *
-from attr import dataclass, field
 import numpy as np
 from queue import PriorityQueue
 import time
