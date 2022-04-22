@@ -27,3 +27,5 @@ When a solution is found, the solver will go back to the board's starting positi
 Below is what the solver looks after solving and backtracing:
 ![image](https://user-images.githubusercontent.com/70275882/163491095-51605497-05b9-4898-85e1-c1812d1e5945.png)
 
+Additionally, a text file called output.txt will be created in the directory showing all of the board states explored
+
