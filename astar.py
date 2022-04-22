@@ -27,6 +27,7 @@ delayEntry = None
 live_board=False # Configuring whether to show the board fly through all of the checked states during solving
 live_graph=False # Configuring whether to plot the graph sequentially or plot the search space all at once at the end
 delay_time=0.5   # Configure the delay between each move shown for the solution
+output = open("output.txt", "w+") # Output file for all of the board states
 
 # A move is a node with a parent move, the tile moved (numbered 1-8), the heurstic for its board state, and the board state
 # It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
@@ -48,6 +49,8 @@ def boardToKey(myboard):
     return(''.join([str(x) for x in myboard.flatten().tolist()]))
 
 def prettyPrintBoard(key):
+    if type(key) is not str:
+        key = boardToKey(key)
     return(
     "["+key[0]+","+key[1]+","+key[2]+"]\n"
     "["+key[3]+","+key[4]+","+key[5]+"]\n"
@@ -174,6 +177,7 @@ def solve():
     while last_move is None:
         last_move = iteration()
 
+    output.close()
     print("Solved")
 
     solution_ordered = []
@@ -234,6 +238,7 @@ def liveUpdate(move):
         addMoveToPlotAndUpdate(move, False)
     if live_board:
         updateBoard(move)
+    output.write(prettyPrintBoard(move.board) + "\n")
 
 initial_board = init()
 
