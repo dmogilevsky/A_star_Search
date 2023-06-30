@@ -11,7 +11,7 @@ solution = np.array([
     [7,8,0]
     ])
 
-# Moves to explore is list of moves. It will choose the move with the lowest f value cost
+# A list of moves. It will choose the move with the lowest f-value cost
 moves_to_explore = PriorityQueue()
 
 # {board, move}
@@ -29,8 +29,8 @@ live_graph=False # Configuring whether to plot the graph sequentially or plot th
 delay_time=0.5   # Configure the delay between each move shown for the solution
 output = open("output.txt", "w+") # Output file for all of the board states
 
-# A move is a node with a parent move, the tile moved (numbered 1-8), the heurstic for its board state, and the board state
-# It is comparable to other moves, where it is LESS than another move if it's heuristic is GREATER
+# A move is a node with a parent move, the tile moved (numbered 1-8), the heuristic for its board state, and the board state
+# It is comparable to other moves, where it is LESS than another move if its heuristic is GREATER
 class Move:
     g=None
     h=None
@@ -44,7 +44,7 @@ class Move:
     def __lt__(self, other):
         return (self.f()) > (other.f())
 
-# Convert a board to a key, allowing for use as a key in a dictionary
+# Convert a board to a dictionary key string, allowing for use as a key in a dictionary
 def boardToKey(myboard):
     return(''.join([str(x) for x in myboard.flatten().tolist()]))
 
@@ -57,7 +57,7 @@ def prettyPrintBoard(key):
     "["+key[6]+","+key[7]+","+key[8]+"]\n"
     )
 
-# Convert a string to a board
+# Convert a board key string to a board
 def keyToBoard(myKey):
     board = np.array(list(myKey))
     board.reshape((3, 3))
@@ -65,8 +65,7 @@ def keyToBoard(myKey):
 
 # https://www.geeksforgeeks.org/check-instance-8-puzzle-solvable/
 # ########################################################################
-# A utility function to count
-# inversions in given array 'arr[]'
+# A utility function to count inversions in a given array 'arr[]'
 def getInvCount(arr):
     inv_count = 0
     empty_value = 0
@@ -76,12 +75,11 @@ def getInvCount(arr):
                 inv_count += 1
     return inv_count
 
-# This function returns true
-# if given 8 puzzle is solvable.
+# This function returns true if the given puzzle is solvable.
 def isSolvable(puzzle) :
     # Count inversions in given 8 puzzle
     inv_count = getInvCount([j for sub in puzzle for j in sub])
-    # return true if inversion count is even.
+    # return true if the inversion count is even.
     return (inv_count % 2 == 0)
 ###########################################################################
 
@@ -95,7 +93,7 @@ def init():
     plt.ylabel('H: Heuristic')
     plt.title('Graph of Search Space')
 
-    # Create board and first move
+    # Create a board and the first move
     solvable = False
     initial_board = None
     while not solvable:
@@ -215,7 +213,7 @@ def addMoveToPlot(move, backtrace):
             if color == 'ro': plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h])
             else: plt.plot([move.prior_move.g, move.g], [move.prior_move.h, move.h], color, linewidth=4)
 
-# Add a move to the plot and update it in real time
+# Add a move to the plot and update it in real-time
 def addMoveToPlotAndUpdate(move, backtrace):
     addMoveToPlot(move, backtrace)
     fig.canvas.draw_idle()
@@ -232,7 +230,7 @@ def updateBoard(move):
                 rows[x][y].update()
         distance_display.configure(text=(("Total distance: " + str(move.h))))
 
-# Do a live update of the graph and board based on whether or not lvie update's were enabled
+# Do a live update of the graph and board based on whether live updates were enabled
 def liveUpdate(move):
     if live_graph:
         addMoveToPlotAndUpdate(move, False)
